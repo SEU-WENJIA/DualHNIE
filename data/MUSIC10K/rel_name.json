@@ -1,0 +1,10 @@
+{
+    "song": 0,
+    "release": 1,
+    "term": 2,
+    "part of": 3,
+    "song_inverse": 4,
+    "release_inverse": 5,
+    "term_inverse": 6,
+    "part of_inverse": 7
+}
