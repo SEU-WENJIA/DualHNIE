@@ -7,3 +7,16 @@ Welcome to DualHGNIE's GitHub repository! This repository hosts the code, data a
 <p align="center">
 <img src="img/figure02.png" height = "480" alt="" align=center />
 </p>
+
+
+## 1. Preparation
+### 1.1 Environment 
+
+The lightweight training requires torch 2.0+, to install all dependencies , update corresponding libraries: 
+```shell
+pip install -r requirements.txt
+```
+
+### 1.2 Data 
+The data can be obtained and downloaded from ([Google Drive](https://drive.google.com/drive/folders/1uhQqAdrIplhhKCHn0McnB-trve6_rATD?usp=drive_link)), and makedir path ```dataset/``` and put dataset in ```dataset/```.
+
