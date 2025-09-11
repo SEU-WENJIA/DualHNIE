@@ -18,5 +18,5 @@ pip install -r requirements.txt
 ```
 
 ### 1.2 Data 
-The data can be obtained and downloaded from ([Google Drive](https://drive.google.com/drive/folders/1uhQqAdrIplhhKCHn0McnB-trve6_rATD?usp=drive_link)), and makedir path ```dataset/``` and put dataset in ```dataset/```.
+The data can be obtained and downloaded from ([Google Drive](https://drive.google.com/file/d/1OH671dAdRRi2H5rae2bVi0vOkhbFkDcy/view?usp=drive_link)), and makedir path ```dataset/``` and put dataset in ```dataset/```.
 
