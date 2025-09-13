@@ -1,40 +1,23 @@
-import argparse
 import numpy as np
 import time
 import torch
 import torch.nn.functional as F
 import dgl
-import pickle as pk
 import os
 import sys
-import tqdm
 curPath = os.path.abspath(os.path.dirname(__file__))
 rootPath = os.path.split(curPath)[0]
 PathProject = os.path.split(rootPath)[0]
 sys.path.append(rootPath)
 sys.path.append(PathProject)
-import torch.nn.functional as F
-import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
 import pickle
-import dgl
-from sklearn.cluster import KMeans 
 import numpy as np
-import pickle
-from typing import Set, List, Dict, Tuple
-from collections import defaultdict, Counter
-
-import torch, gc
-gc.collect()
-torch.cuda.empty_cache()
-
-
-
 from collections import defaultdict
 from itertools import combinations
-import torch
+
 
 
 def get_hyperedge_types(edges, edge_type, hyperedges):
@@ -159,16 +142,16 @@ def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k
     labels = data['labels']  # [num_nodes]
 
     if 'semantic' in dataset_name:
-        node_feats = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb_lang.pk', 'rb'))
+        node_feats = pickle.load(open('./datasets/fb_lang.pk', 'rb'))
         node_feats = torch.from_numpy(node_feats).float()
     elif 'concat' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/fb_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
         node_feats = torch.cat([node_feat1, node_feat2], dim=1)
     elif 'two' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/fb_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
     else:
         node_feats = data['features']  # [num_nodes, num_feature]
@@ -199,54 +182,39 @@ def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k
     hyperedges, node_hyperedge_array, hyperedge_types = build_hypergraph(rel_to_entities, num_entities, edges, edge_types)
 
 
-    dataset_dir = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k'
+    dataset_dir = './datasets/fb15k'
     hyperedge_types_path = os.path.join(dataset_dir, 'hyperedge_types.pt')
     hyperedges_path = os.path.join(dataset_dir, 'hyperedges.npy')
     node_hyperedge_array_path = os.path.join(dataset_dir, 'node_hyperedge_array.npy')
 
-    # 检查文件是否存在
+
     if os.path.exists(hyperedge_types_path) and os.path.exists(hyperedges_path) and os.path.exists(node_hyperedge_array_path):
-        # 文件存在，直接读取
+
         hyperedge_types = torch.load(hyperedge_types_path)
         hyperedges = np.load(hyperedges_path, allow_pickle=True)
         node_hyperedge_array = np.load(node_hyperedge_array_path, allow_pickle=True).tolist()
     else:
-        # if not, generate data
         hyperedges, node_hyperedge_array, hyperedge_types = build_hypergraph(
             rel_to_entities, num_entities, edges, edge_types
         )
 
-        # 确保目录存在
+        
         os.makedirs(dataset_dir, exist_ok=True)
         torch.save(hyperedge_types, hyperedge_types_path)
         np.save(hyperedges_path, hyperedges)
         np.save(node_hyperedge_array_path, node_hyperedge_array, allow_pickle=True)
 
-    # torch.save(hyperedge_types, '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k/hyperedge_types.pt')
-    # np.save('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k/hyperedges.npy', hyperedges)
-    # np.save('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k/node_hyperedge_array.npy', node_hyperedge_array, allow_pickle=True)
-
-
-    # hyperedge_types = torch.load('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k/hyperedge_types.pt')
-    # hyperedges = np.load('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k/hyperedges.npy', allow_pickle=True)
-    # node_hyperedge_array = np.load('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k/node_hyperedge_array.npy', allow_pickle=True).tolist()
 
     rel_num = (max(hyperedge_types)+1).item()
     hg = dgl.heterograph({('node', 'to_hyperedge', 'hyperedge'): node_hyperedge_array})
 
     H = np.zeros((num_entities, len(hyperedges)))
-    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  # 创建实体到索引的映射
+    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  
     for hyperedge_id, hyperedge in enumerate(hyperedges):
         for node in hyperedge:
             if node in entity_to_index:
                 H[entity_to_index[node], hyperedge_id] = 1
     H = torch.tensor(H, dtype=torch.float32)
-
-
-    # 这里存在问题，超边的信息实质上是超节点的信息，即节点——>超边——>节点， 实质上还是超节点的数量
-    # hyperedge_features = torch.ones(hg.num_edges(), 10)  # hetergeous hypergraph  edges  type [int1, int2, int3]
-    # hyperedge_types = hyperedge_features.sum(-1).long()  #labels#
-
 
 
     # generate edge norm
@@ -300,34 +268,30 @@ def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k
 
 def load_imdb_s_rel_data(data_path, cross_validation_shift=0, dataset_name='IMDB_S_rel'):
     """
-    Load FB15k data and construct a hypergraph with shared relations.
-    
+    Load FB15k data and construct a hypergraph with shared relations.    
     :param data_path: str, data file path
     :param cross_validation_shift: int, shift of data split for cross-validation
     :return: A tuple containing the hypergraph, edge types, edge norm, relation number, node features, labels, and indices
-
     """
 
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
 
-
-
     if 'semantic' in dataset_name:
-        node_feats = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_lang.pk', 'rb'))
+        node_feats = pickle.load(open('./datasets/imdb_s_lang.pk', 'rb'))
         node_feats = torch.from_numpy(node_feats).float()
     elif 'two' in dataset_name:
 
-        node_feat1 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_node2vec.pk', 'rb'))
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_lang.pk', 'rb'))
+        node_feat1 = pickle.load(open('./datasets/imdb_s_node2vec.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/imdb_s_lang.pk', 'rb'))
         
     elif 'concat' in dataset_name:
-        node_feat1 = torch.from_numpy(pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_node2vec.pk', 'rb')))
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_lang.pk', 'rb'))
+        node_feat1 = torch.from_numpy(pickle.load(open('./datasets/imdb_s_node2vec.pk', 'rb')))
+        node_feat2 = pickle.load(open('./datasets/imdb_s_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
         node_feats = torch.cat([node_feat1, node_feat2], 1)
     else:
-        node_feats = torch.from_numpy(pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_node2vec.pk', 'rb')))
+        node_feats = torch.from_numpy(pickle.load(open('./datasets/imdb_s_node2vec.pk', 'rb')))
 
     
     # edge list
@@ -350,7 +314,7 @@ def load_imdb_s_rel_data(data_path, cross_validation_shift=0, dataset_name='IMDB
     num_entities = max(all_entities) + 1 
 
 
-    dataset_dir = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb/'
+    dataset_dir = './datasets/imdb/'
     hyperedge_types_path = os.path.join(dataset_dir, 'hyperedge_types.pt')
     hyperedges_path = os.path.join(dataset_dir, 'hyperedges.npy')
     node_hyperedge_array_path = os.path.join(dataset_dir, 'node_hyperedge_array.npy')
@@ -367,7 +331,7 @@ def load_imdb_s_rel_data(data_path, cross_validation_shift=0, dataset_name='IMDB
             rel_to_entities, num_entities, edges, edge_types
         )
 
-        # 确保目录存在
+        
         os.makedirs(dataset_dir, exist_ok=True)
         torch.save(hyperedge_types, hyperedge_types_path)
         np.save(hyperedges_path, hyperedges)
@@ -378,7 +342,7 @@ def load_imdb_s_rel_data(data_path, cross_validation_shift=0, dataset_name='IMDB
     hg = dgl.heterograph({('node', 'to_hyperedge', 'hyperedge'): node_hyperedge_array})
 
     H = np.zeros((num_entities, len(hyperedges)))
-    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  # 创建实体到索引的映射
+    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  
     for hyperedge_id, hyperedge in enumerate(hyperedges):
         for node in hyperedge:
             if node in entity_to_index:
@@ -449,16 +413,16 @@ def load_tmdb_rel_data(data_path, cross_validation_shift=0, dataset_name='TMDB_r
 
 
     if 'semantic' in dataset_name:
-        node_feats = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb_lang.pk', 'rb'))
+        node_feats = pickle.load(open('./datasets/tmdb_lang.pk', 'rb'))
         node_feats = torch.from_numpy(node_feats).float()
     elif 'concat' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/tmdb_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
         node_feats = torch.cat([node_feat1, node_feat2], dim=1)
     elif 'two' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/tmdb_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
     else:
         node_feats = data['features']  # [num_nodes, num_feature]
@@ -494,7 +458,7 @@ def load_tmdb_rel_data(data_path, cross_validation_shift=0, dataset_name='TMDB_r
             if entity < num_entities:
                 entity_to_relations[entity].add(rel_type)
 
-    dataset_dir = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb5k'
+    dataset_dir = './datasets/tmdb5k'
     hyperedge_types_path = os.path.join(dataset_dir, 'hyperedge_types.pt')
     hyperedges_path = os.path.join(dataset_dir, 'hyperedges.npy')
     node_hyperedge_array_path = os.path.join(dataset_dir, 'node_hyperedge_array.npy')
@@ -511,7 +475,7 @@ def load_tmdb_rel_data(data_path, cross_validation_shift=0, dataset_name='TMDB_r
             rel_to_entities, num_entities, edges, edge_types
         )
 
-        # 确保目录存在
+        
         os.makedirs(dataset_dir, exist_ok=True)
         torch.save(hyperedge_types, hyperedge_types_path)
         np.save(hyperedges_path, hyperedges)
@@ -522,7 +486,7 @@ def load_tmdb_rel_data(data_path, cross_validation_shift=0, dataset_name='TMDB_r
     hg = dgl.heterograph({('node', 'to_hyperedge', 'hyperedge'): node_hyperedge_array})
 
     H = np.zeros((num_entities, len(hyperedges)))
-    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  # 创建实体到索引的映射
+    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  
     for hyperedge_id, hyperedge in enumerate(hyperedges):
         for node in hyperedge:
             if node in entity_to_index:
@@ -597,16 +561,16 @@ def load_music10k_rel_data(data_path, cross_validation_shift=0, dataset_name='mu
     labels = data['labels']  # [num_nodes]
 
     if 'semantic' in dataset_name:
-        node_feats = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/music_lang.pk', 'rb'))
+        node_feats = pickle.load(open('./datasets/music_lang.pk', 'rb'))
         node_feats = torch.from_numpy(node_feats).float()
     elif 'concat' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/music_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/music_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
         node_feats = torch.cat([node_feat1, node_feat2], dim=1)
     elif 'two' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/music_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/music_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
     else:
         node_feats = data['features']  # [num_nodes, num_feature]
@@ -640,7 +604,7 @@ def load_music10k_rel_data(data_path, cross_validation_shift=0, dataset_name='mu
             if entity < num_entities:
                 entity_to_relations[entity].add(rel_type)
 
-    dataset_dir = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/music10k'
+    dataset_dir = './datasets/music10k'
     hyperedge_types_path = os.path.join(dataset_dir, 'hyperedge_types.pt')
     hyperedges_path = os.path.join(dataset_dir, 'hyperedges.npy')
     node_hyperedge_array_path = os.path.join(dataset_dir, 'node_hyperedge_array.npy')
@@ -657,7 +621,7 @@ def load_music10k_rel_data(data_path, cross_validation_shift=0, dataset_name='mu
             rel_to_entities, num_entities, edges, edge_types
         )
 
-        # 确保目录存在
+        
         os.makedirs(dataset_dir, exist_ok=True)
         torch.save(hyperedge_types, hyperedge_types_path)
         np.save(hyperedges_path, hyperedges)
@@ -669,20 +633,13 @@ def load_music10k_rel_data(data_path, cross_validation_shift=0, dataset_name='mu
     hg = dgl.heterograph({('node', 'to_hyperedge', 'hyperedge'): node_hyperedge_array})
 
     H = np.zeros((num_entities, len(hyperedges)))
-    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  # 创建实体到索引的映射
+    entity_to_index = {entity: idx for idx, entity in enumerate(all_entities)}  
     for hyperedge_id, hyperedge in enumerate(hyperedges):
         for node in hyperedge:
             if node in entity_to_index:
                 H[entity_to_index[node], hyperedge_id] = 1
 
     H = torch.tensor(H, dtype=torch.float32)
-
-
-    # 这里存在问题，超边的信息实质上是超节点的信息，即节点——>超边——>节点， 实质上还是超节点的数量
-    # hyperedge_features = torch.ones(hg.num_edges(), 10)  # hetergeous hypergraph  edges  type [int1, int2, int3]
-    # hyperedge_types = hyperedge_features.sum(-1).long()  #labels#
-
-
 
     # generate edge norm
     in_deg = H.sum(-1)
@@ -732,23 +689,23 @@ def load_music10k_rel_data(data_path, cross_validation_shift=0, dataset_name='mu
 def load_data(data_path, cross_validation_shift, dataset_name):
 
     if 'FB15k' in dataset_name:
-        data_path = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k_rel.pk'
+        data_path = './datasets/fb15k_rel.pk'
         g,  edge_types, H, hyperedges, edges,  rel_num, struct_feats, semantic_feats, labels, train_idx, val_idx, test_idx =  \
             load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k_rel_two')
 
     elif 'IMDB_S' in dataset_name:
-        data_path = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_rel.pk'
+        data_path = './datasets/imdb_s_rel.pk'
         g,  edge_types, H, hyperedges, edges,  rel_num, struct_feats, semantic_feats, labels, train_idx, val_idx, test_idx =  \
             load_imdb_s_rel_data(data_path, cross_validation_shift=0, dataset_name='IMDB_S_rel_two')
 
     elif 'TMDB' in dataset_name:
 
-        data_path = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb_rel.pk'
+        data_path = './datasets/tmdb_rel.pk'
         g,  edge_types, H, hyperedges, edges,  rel_num, struct_feats, semantic_feats, labels, train_idx, val_idx, test_idx =  \
             load_tmdb_rel_data(data_path, cross_validation_shift=0, dataset_name='TMDB_rel_two')
 
     elif 'MUSIC'  in dataset_name or 'music' in dataset_name:
-        data_path  = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/music_rel.pk'
+        data_path  = './datasets/music_rel.pk'
         g,  edge_types, H, hyperedges, edges,  rel_num, struct_feats, semantic_feats, labels, train_idx, val_idx, test_idx =  \
             load_music10k_rel_data(data_path, cross_validation_shift=0, dataset_name='MUSIC_rel')
 

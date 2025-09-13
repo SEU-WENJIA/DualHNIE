@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .SA_layer import SALayer
+from layer.SA_Layer import SALayer
 
 class DualGAT(nn.Module):
 
@@ -64,6 +64,8 @@ class DualGAT(nn.Module):
             self.beta = nn.Parameter(torch.FloatTensor(size=(1, heads[-2])))
             nn.init.ones_(self.gamma)
             nn.init.zeros_(self.beta)
+
+
 
 
 

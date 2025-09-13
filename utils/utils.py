@@ -1,11 +1,7 @@
-import dgl
 import numpy as np
-import pickle
 import random
 import torch
-from sklearn.metrics import f1_score
 from .metric import ndcg, spearman_sci
-import pdb
 from sklearn.metrics import f1_score, median_absolute_error
 
 def convert_to_gpu(*data, device):
@@ -88,9 +84,26 @@ def rank_evaluate(predicts, labels, NDCG_k, loss_func, spearman=False):
 
 
 
-def get_centrality(graph):
+def get_graph_centrality(graph):
     g = graph.local_var()
     in_deg = g.in_degrees(range(g.number_of_nodes())).float()
     theta = 1e-4
     centrality = torch.log(in_deg + theta)
+    return centrality
+
+
+
+
+def get_hypergraph_centrality(hypergraph,H):
+    '''
+    input: hypergraph [n,m]
+    output: hypergraph node degree    
+    degree_{node}  = \sum_{j} H_ij
+    '''
+    # g = hypergraph.local_var()
+    # in_deg = g.in_degrees(range(g.number_of_nodes())).float()
+    node_degree = H.sum(-1)
+    theta = 1e-4
+    centrality = 1/torch.log(node_degree + theta)   
+    centrality = centrality/centrality.sum()
     return centrality

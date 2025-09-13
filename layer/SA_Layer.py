@@ -23,6 +23,8 @@ class SALayer(nn.Module):
                  residual=False,
                  activation=None,
                  allow_zero_in_degree=False):
+        
+        
         super(SALayer, self).__init__()
         self._num_heads = num_heads
         self._in_src_feats, self._in_dst_feats = expand_as_pair(in_feats)

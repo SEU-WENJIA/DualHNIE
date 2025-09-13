@@ -3,87 +3,8 @@ import numpy as np
 import pickle
 import random
 import torch
-from sklearn.metrics import f1_score
-from .metric import ndcg, spearman_sci
-import pdb
-from sklearn.metrics import f1_score, median_absolute_error
-
-def convert_to_gpu(*data, device):
-    res = []
-    for item in data:
-        item = item.to(device)
-        res.append(item)
-    return tuple(res)
 
 
-def set_random_seed(seed=0):
-    """
-    set random seed.
-    :param seed: int, random seed to use
-    :return:
-    """
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-
-
-def load_model(model, model_path):
-    """Load the model.
-    :param model: model
-    :param model_path: model path
-    """
-    print(f"load model {model_path}")
-    model.load_state_dict(torch.load(model_path))
-
-
-def count_parameters_in_KB(model):
-    """
-    count the size of trainable parameters in model (KB)
-    :param model: model
-    :return:
-    """
-    param_num = np.sum(np.prod(v.size()) for v in model.parameters()) / 1e3
-    return param_num
-
-
-def get_rank_metrics(predicts, labels, NDCG_k, spearman=False):
-    """
-    calculate NDCG@k metric
-    :param predicts: Tensor, shape (N, 1)
-    :param labels: Tensor, shape (N, 1)
-    :return:
-    """
-    if spearman:
-        return ndcg(labels, predicts, NDCG_k), spearman_sci(labels, predicts)
-    return ndcg(labels, predicts, NDCG_k)
-
-def median_AE(y_true, y_pred):
-    y_true = y_true.reshape(-1).detach().cpu().numpy()
-    y_pred = y_pred.reshape(-1).detach().cpu().numpy()
-    return median_absolute_error(y_true, y_pred)
-
-
-def rank_evaluate(predicts, labels, NDCG_k, loss_func, spearman=False):
-    """
-    evaluation used for validation or test
-    :param predicts: Tensor, shape (N, 1)
-    :param labels: Tensor, shape (N, 1)
-    :param loss_func: loss function
-    :return:
-    """
-    with torch.no_grad():
-        loss = loss_func(predicts, labels)
-    if spearman:
-        ndcg_score, spear_score = get_rank_metrics(predicts, labels, NDCG_k, spearman)
-        medianAE_score = median_AE(predicts, labels)
-        return loss, ndcg_score, spear_score, medianAE_score
-    else:
-        ndcg_score = get_rank_metrics(predicts, labels, NDCG_k, spearman)
-        medianAE_score = median_AE(predicts, labels)
-
-        return loss, ndcg_score, medianAE_score
 
 
 def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k_rel'):
@@ -93,7 +14,7 @@ def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k
     :param cross_validation_shift: int, shift of data split
     :return:
     """
-    # data_path = '/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb15k_rel.pk'
+    # data_path = './datasets/fb15k_rel.pk'
    
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
@@ -103,7 +24,7 @@ def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k
 
 
     node_feat1 = data['features']
-    node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/fb_lang.pk', 'rb'))
+    node_feat2 = pickle.load(open('./datasets/fb_lang.pk', 'rb'))
     node_feat2 = torch.from_numpy(node_feat2).float()
 
 
@@ -179,19 +100,19 @@ def load_imdb_s_rel_data(data_path, cross_validation_shift=0, dataset_name='IMDB
         data = pickle.load(f)
 
     if 'semantic' in dataset_name:
-        node_feats = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_lang.pk', 'rb'))
+        node_feats = pickle.load(open('./datasets/imdb_s_lang.pk', 'rb'))
         node_feats = torch.from_numpy(node_feats).float()
     elif 'two' in dataset_name:
-        node_feat1 = torch.from_numpy(pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_node2vec.pk', 'rb')))
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_lang.pk', 'rb'))
+        node_feat1 = torch.from_numpy(pickle.load(open('./datasets/imdb_s_node2vec.pk', 'rb')))
+        node_feat2 = pickle.load(open('./datasets/imdb_s_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
     elif 'concat' in dataset_name:
-        node_feat1 = torch.from_numpy(pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_node2vec.pk', 'rb')))
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_lang.pk', 'rb'))
+        node_feat1 = torch.from_numpy(pickle.load(open('./datasets/imdb_s_node2vec.pk', 'rb')))
+        node_feat2 = pickle.load(open('./datasets/imdb_s_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
         node_feats = torch.cat([node_feat1, node_feat2], 1)
     else:
-        node_feats = torch.from_numpy(pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/imdb_s_node2vec.pk', 'rb')))
+        node_feats = torch.from_numpy(pickle.load(open('./datasets/imdb_s_node2vec.pk', 'rb')))
 
     # edge list
     edges = data['edges']
@@ -264,15 +185,15 @@ def load_tmdb_rel_data(data_path, cross_validation_shift=0, dataset_name='TMDB_r
     rel_num = 34
 
     if 'semantic' in dataset_name:
-        node_feats = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb_lang.pk', 'rb'))
+        node_feats = pickle.load(open('./datasets/tmdb_lang.pk', 'rb'))
         node_feats = torch.from_numpy(node_feats).float()
     elif 'two' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/tmdb_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
     elif 'concat' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/chenjiawen/GNN/RGTN-NIE-main/datasets/tmdb_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/tmdb_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
         node_feats = torch.cat([node_feat1, node_feat2], 1)
     else:
@@ -352,15 +273,15 @@ def load_music_rel_data(data_path, cross_validation_shift=0, dataset_name='MUSIC
     rel_num = 34
 
     if 'semantic' in dataset_name:
-        node_feats = pickle.load(open('/public/shaoqi/HGT/datasets/music_lang.pk', 'rb'))
+        node_feats = pickle.load(open('./datasets/music_lang.pk', 'rb'))
         node_feats = torch.from_numpy(node_feats).float()
     elif 'two' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/shaoqi/HGT/datasets/music_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/music_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
     elif 'concat' in dataset_name:
         node_feat1 = data['features']
-        node_feat2 = pickle.load(open('/public/shaoqi/HGT/datasets/music_lang.pk', 'rb'))
+        node_feat2 = pickle.load(open('./datasets/music_lang.pk', 'rb'))
         node_feat2 = torch.from_numpy(node_feat2).float()
         node_feats = torch.cat([node_feat1, node_feat2], 1)
     else:
@@ -419,16 +340,6 @@ def load_music_rel_data(data_path, cross_validation_shift=0, dataset_name='MUSIC
     return hg, edge_types, edge_norm, rel_num, node_feats, labels, train_idx, val_idx, test_idx
 
 
-
-
-
-
-
-
-
-
-
-
 def load_data(data_path, dataset_name, cross_validation_shift=0):
     """
     load dataset based on the input dataset name
@@ -446,6 +357,9 @@ def load_data(data_path, dataset_name, cross_validation_shift=0):
         return load_tmdb_rel_data(data_path, cross_validation_shift, dataset_name)
     elif dataset_name.startswith('MUSIC10K'):
         return load_music_rel_data(data_path, cross_validation_shift, dataset_name)
+    elif 'MUSIC'  in dataset_name or 'music' in dataset_name:
+        return load_music_rel_data(data_path, cross_validation_shift, dataset_name)
+
     else:
         return NotImplementedError('Unsupported dataset {}'.format(dataset_name))
 

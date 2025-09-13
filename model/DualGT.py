@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-from graph_transformer import GTLayer
-import dgl
-import tqdm
+from layer.Graph_transformer import GTLayer
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -29,9 +27,7 @@ class DualGT(nn.Module):
                  edge_mode,   #  'MUL'
                  ret_feat=False,
                  rel_emb=None):
-        
-
-        
+    
         super(DualGT, self).__init__()
         self.g = g
         self.centrality = centrality

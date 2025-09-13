@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from graph_transformer import GTLayer
+from ..layer.Graph_transformer import GTLayer
 import dgl
 import tqdm
 import os

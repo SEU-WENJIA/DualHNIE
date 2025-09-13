@@ -13,7 +13,7 @@ from torch.nn import Parameter
 import torch.nn.functional as F
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
 
 
@@ -31,131 +31,6 @@ class Identity(nn.Module):
     
     def forward(self, x):
         return x
-
-
-
-class UniGSA_layer(nn.Module):
-    def __init__(self, in_feats, out_feats, edge_dim, num_heads, feat_drop=0, attn_drop=0, 
-                 negative_slope=0.2, residual=False, activation=None, allow_zero_in_degree=False):
-        super(UniGSA_layer, self).__init__()
-        self._num_heads = num_heads
-        self._in_src_feats, self._in_dst_feats = expand_as_pair(in_feats)
-        self._out_feats = out_feats
-        self._allow_zero_in_degree = allow_zero_in_degree
-        self._edge_dim = edge_dim
-
-        # Attention parameters initialization
-        self.attn_l = Parameter(torch.FloatTensor(size=(1, num_heads, out_feats)))  # Source node attention
-        self.attn_r = Parameter(torch.FloatTensor(size=(1, num_heads, out_feats)))  # Destination node attention
-        self.attn_m = Parameter(torch.FloatTensor(size=(1, num_heads, edge_dim)))    # Edge attention
-
-        self.feat_drop = nn.Dropout(feat_drop)
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.leaky_relu = nn.LeakyReLU(negative_slope)
-
-        if residual:
-            if self._in_dst_feats != out_feats:
-                self.res_fc = nn.Linear(self._in_dst_feats, num_heads * out_feats, bias=False)
-            else:
-                self.res_fc = Identity()
-        else:
-            self.register_buffer('res_fc', None)
-        
-        self.reset_parameters()
-        self.activation = activation
-
-    def reset_parameters(self):
-        gain = nn.init.calculate_gain('relu')
-        nn.init.xavier_normal_(self.attn_l, gain=gain)
-        nn.init.xavier_normal_(self.attn_r, gain=gain)
-        nn.init.xavier_normal_(self.attn_m, gain=gain)
-
-        if isinstance(self.res_fc, nn.Linear):
-            nn.init.xavier_normal_(self.res_fc.weight, gain=gain)
-
-    def forward(self, g, feat, edge_feat, H):
-        '''
-        feat: nodes' features [node_num, in_feats]
-        edge_feat: hyperedges' feature [edge_num, edge_dim]
-        H: adjacency matrix of hypergraph [node_num, edge_num]
-        '''
-        device = edge_feat.device
-        H = H.to(device)
-        node_num, edge_num  = H.size() 
-
-            # Pre-compute frequently used shapes
-        nh = self._num_heads  # num_heads
-        nf = self._out_feats  # out_feats
- 
-        edge_feat = torch.einsum('ij,ik->jk',H , edge_feat)        
-        # Dropout for features
-        feat = self.feat_drop(feat)
-        edge_feat = self.feat_drop(edge_feat)
-        
-        # Reshape features
-        h_src = h_dst = feat
-        feat_src = feat_dst = h_src.view(node_num, self._num_heads, self._out_feats)
-        
-        # Stage 1: Node to Hyperedge Attention
-        # Compute attention scores for source nodes to edges
-        el = (feat_src * self.attn_l).sum(dim=-1).unsqueeze(-1)  # [node_num, num_heads, 1]
-        
-        # Prepare edge features
-        feat_e = edge_feat.unsqueeze(1)  # [edge_num, 1, edge_dim]
-        em = (feat_e * self.attn_m).sum(dim=-1).unsqueeze(-1)  # [edge_num, num_heads, 1]       
-        # Broadcast and combine attention scores
-        # H: [node_num, edge_num]
-        # el: [node_num, num_heads, 1]
-        # em: [edge_num, num_heads, 1]
-        # Expand dimensions for broadcasting
-        H_expanded = H.unsqueeze(1)  # [node_num, 1, edge_num]
-        # 
-        el_expanded = el.unsqueeze(2)  # [node_num, num_heads, 1, 1]
-        em_expanded = em.permute(1, 0, 2)   # [1, num_heads, edge_num, 1]
-        
-        # Compute attention scores
-        e = el_expanded + em_expanded  # [node_num, num_heads, edge_num, 1]
-        e = self.leaky_relu(e.squeeze(-1))  # [node_num, num_heads, edge_num]
-        
-        # Mask attention scores with hypergraph structure
-        e = e * H_expanded.to(device)  # [node_num, num_heads, edge_num]
-        
-        # Compute softmax attention weights
-        # First create a mask for zero entries in H
-        mask = (H == 0).unsqueeze(1).to(device)  # [node_num, 1, edge_num]
-        e_masked = e.masked_fill(mask, float('-inf'))
-        a = F.softmax(e_masked, dim=-1)  # [node_num, num_heads, edge_num]
-        a = self.attn_drop(a)
-        
-        # Stage 2: Hyperedge to Node Attention
-        # Aggregate node features through hyperedges
-        # feat_src: [node_num, num_heads, out_feats]
-        # a: [node_num, num_heads, edge_num]
-        
-        # First compute weighted sum of node features for each hyperedge
-        # H.T: [edge_num, node_num]
-        # a: [node_num, num_heads, edge_num] -> permute to [edge_num, num_heads, node_num]
-        # feat_src: [node_num, num_heads, out_feats] -> permute to [num_heads, node_num, out_feats]
-        
-        # Compute edge features: sum over nodes connected to each edge
-
-        del  e_masked, em_expanded,el_expanded,  e, el, em
-        weighted_features = feat_src.unsqueeze(2) * a.unsqueeze(3)
-        
-        # Now aggregate edge features back to nodes
-        rst = torch.einsum('ne,nhef->nhf', H.float(), weighted_features)
-        
-        # Residual connection if defined
-        if self.res_fc is not None:
-            resval = self.res_fc(h_dst).view(h_dst.shape[0], -1, self._out_feats)
-            rst = rst + resval
-
-        # Apply activation function if defined
-        if self.activation:
-            rst = self.activation(rst)
-
-        torch.cuda.empty_cache()  # Explicitly clear CUDA cache if using GPU
-        return rst.reshape(rst.size(0), -1)  # Flatten the output
 
 
 class HGSA_layer(nn.Module):
@@ -257,11 +132,11 @@ class HGSA_layer(nn.Module):
             return rst.reshape(rst.size(0), -1)  # Flatten the output
 
 
-class HGSAlayer(nn.Module):
+class HGSALayer(nn.Module):
     def __init__(self, in_feats, out_feats, edge_dim, num_heads, feat_drop=0, 
                  attn_drop=0, negative_slope=0.2, residual=None, activation=None, 
                  allow_zero_in_degree=False):
-        super(HGSAlayer, self).__init__()
+        super(HGSALayer, self).__init__()
         self._num_heads = num_heads
         self._in_feats = in_feats
         self._out_feats = out_feats
@@ -397,3 +272,128 @@ class HGSAlayer(nn.Module):
     
         return rst.view(n_nodes, -1)
     
+
+
+class UniGSA_layer(nn.Module):
+    def __init__(self, in_feats, out_feats, edge_dim, num_heads, feat_drop=0, attn_drop=0, 
+                 negative_slope=0.2, residual=False, activation=None, allow_zero_in_degree=False):
+        super(UniGSA_layer, self).__init__()
+        self._num_heads = num_heads
+        self._in_src_feats, self._in_dst_feats = expand_as_pair(in_feats)
+        self._out_feats = out_feats
+        self._allow_zero_in_degree = allow_zero_in_degree
+        self._edge_dim = edge_dim
+
+        # Attention parameters initialization
+        self.attn_l = Parameter(torch.FloatTensor(size=(1, num_heads, out_feats)))  # Source node attention
+        self.attn_r = Parameter(torch.FloatTensor(size=(1, num_heads, out_feats)))  # Destination node attention
+        self.attn_m = Parameter(torch.FloatTensor(size=(1, num_heads, edge_dim)))    # Edge attention
+
+        self.feat_drop = nn.Dropout(feat_drop)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.leaky_relu = nn.LeakyReLU(negative_slope)
+
+        if residual:
+            if self._in_dst_feats != out_feats:
+                self.res_fc = nn.Linear(self._in_dst_feats, num_heads * out_feats, bias=False)
+            else:
+                self.res_fc = Identity()
+        else:
+            self.register_buffer('res_fc', None)
+        
+        self.reset_parameters()
+        self.activation = activation
+
+    def reset_parameters(self):
+        gain = nn.init.calculate_gain('relu')
+        nn.init.xavier_normal_(self.attn_l, gain=gain)
+        nn.init.xavier_normal_(self.attn_r, gain=gain)
+        nn.init.xavier_normal_(self.attn_m, gain=gain)
+
+        if isinstance(self.res_fc, nn.Linear):
+            nn.init.xavier_normal_(self.res_fc.weight, gain=gain)
+
+    def forward(self, g, feat, edge_feat, H):
+        '''
+        feat: nodes' features [node_num, in_feats]
+        edge_feat: hyperedges' feature [edge_num, edge_dim]
+        H: adjacency matrix of hypergraph [node_num, edge_num]
+        '''
+        device = edge_feat.device
+        H = H.to(device)
+        node_num, edge_num  = H.size() 
+
+            # Pre-compute frequently used shapes
+        nh = self._num_heads  # num_heads
+        nf = self._out_feats  # out_feats
+ 
+        edge_feat = torch.einsum('ij,ik->jk',H , edge_feat)        
+        # Dropout for features
+        feat = self.feat_drop(feat)
+        edge_feat = self.feat_drop(edge_feat)
+        
+        # Reshape features
+        h_src = h_dst = feat
+        feat_src = feat_dst = h_src.view(node_num, self._num_heads, self._out_feats)
+        
+        # Stage 1: Node to Hyperedge Attention
+        # Compute attention scores for source nodes to edges
+        el = (feat_src * self.attn_l).sum(dim=-1).unsqueeze(-1)  # [node_num, num_heads, 1]
+        
+        # Prepare edge features
+        feat_e = edge_feat.unsqueeze(1)  # [edge_num, 1, edge_dim]
+        em = (feat_e * self.attn_m).sum(dim=-1).unsqueeze(-1)  # [edge_num, num_heads, 1]       
+        # Broadcast and combine attention scores
+        # H: [node_num, edge_num]
+        # el: [node_num, num_heads, 1]
+        # em: [edge_num, num_heads, 1]
+        # Expand dimensions for broadcasting
+        H_expanded = H.unsqueeze(1)  # [node_num, 1, edge_num]
+        # 
+        el_expanded = el.unsqueeze(2)  # [node_num, num_heads, 1, 1]
+        em_expanded = em.permute(1, 0, 2)   # [1, num_heads, edge_num, 1]
+        
+        # Compute attention scores
+        e = el_expanded + em_expanded  # [node_num, num_heads, edge_num, 1]
+        e = self.leaky_relu(e.squeeze(-1))  # [node_num, num_heads, edge_num]
+        
+        # Mask attention scores with hypergraph structure
+        e = e * H_expanded.to(device)  # [node_num, num_heads, edge_num]
+        
+        # Compute softmax attention weights
+        # First create a mask for zero entries in H
+        mask = (H == 0).unsqueeze(1).to(device)  # [node_num, 1, edge_num]
+        e_masked = e.masked_fill(mask, float('-inf'))
+        a = F.softmax(e_masked, dim=-1)  # [node_num, num_heads, edge_num]
+        a = self.attn_drop(a)
+        
+        # Stage 2: Hyperedge to Node Attention
+        # Aggregate node features through hyperedges
+        # feat_src: [node_num, num_heads, out_feats]
+        # a: [node_num, num_heads, edge_num]
+        
+        # First compute weighted sum of node features for each hyperedge
+        # H.T: [edge_num, node_num]
+        # a: [node_num, num_heads, edge_num] -> permute to [edge_num, num_heads, node_num]
+        # feat_src: [node_num, num_heads, out_feats] -> permute to [num_heads, node_num, out_feats]
+        
+        # Compute edge features: sum over nodes connected to each edge
+
+        del  e_masked, em_expanded,el_expanded,  e, el, em
+        weighted_features = feat_src.unsqueeze(2) * a.unsqueeze(3)
+        
+        # Now aggregate edge features back to nodes
+        rst = torch.einsum('ne,nhef->nhf', H.float(), weighted_features)
+        
+        # Residual connection if defined
+        if self.res_fc is not None:
+            resval = self.res_fc(h_dst).view(h_dst.shape[0], -1, self._out_feats)
+            rst = rst + resval
+
+        # Apply activation function if defined
+        if self.activation:
+            rst = self.activation(rst)
+
+        torch.cuda.empty_cache()  # Explicitly clear CUDA cache if using GPU
+        return rst.reshape(rst.size(0), -1)  # Flatten the output
+
