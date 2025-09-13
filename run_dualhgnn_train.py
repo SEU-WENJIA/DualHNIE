@@ -9,25 +9,12 @@ import sys
 import pickle as pk
 import logging
 from datetime import datetime
-
-
-# 设置日志目录
-
-# 创建自定义的实时文件处理器
 class RealTimeFileHandler(logging.FileHandler):
     def emit(self, record):
         super().emit(record)
-        self.flush()  # 确保每条日志都立即写入文件
-
-
-# 设置CUDA环境变量
+        self.flush()  
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # 设置为 "1" 便于调试，部署时可注释掉
-
-
-
-
-# 添加项目路径
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  
 curPath = os.path.abspath(os.path.dirname(__file__))
 rootPath = os.path.split(curPath)[0]
 PathProject = os.path.split(rootPath)[0]

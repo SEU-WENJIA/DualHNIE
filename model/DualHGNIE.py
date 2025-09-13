@@ -95,7 +95,7 @@ class DualHGNIE(nn.Module):
                     ))  
             
 
-            # 文本编码模块：采用HyperGraph Transformer，提取上下文本之间关联
+            # Text encoding module: using HyperGraph Transformer to extract the relationship between context
             # input projection (no residual)   
             self.hgt_layers.append(SCAHGTLayer(
                             in_dim_sturct +in_dim_semantic, 
@@ -131,7 +131,7 @@ class DualHGNIE(nn.Module):
 
         else:
 
-            # 结构编码采用，超图注意力机制，提取知识图谱的结构特征
+            # Structural encoding uses the hypergraph attention mechanism to extract the structural features of the knowledge graph.
             self.scoring_nn = nn.ModuleList()
             self.heads = heads 
             for _ in range(heads[0]):
@@ -170,7 +170,7 @@ class DualHGNIE(nn.Module):
                     ))  
             
 
-            # 文本编码模块：采用HyperGraph Transformer，提取上下文本之间关联
+            # Text encoding module: using HyperGraph Transformer to extract the relationship between context
             # input projection (no residual)   
             self.hgt_layers.append(SCAHGTLayer(
                             in_dim_semantic, 
@@ -203,34 +203,20 @@ class DualHGNIE(nn.Module):
 
 
 
-        # 结构输出层
-        # self.struct_output_linear = nn.Sequential(
-        #     nn.Linear(heads[-2], num_hidden),
-        #     nn.Sigmoid(),
-        #     nn.Linear(num_hidden, 1)
-        # )
-            self.struct_output_linear = nn.Linear(num_hidden*heads[-2], 1)  # self.h_dim  or   1 
 
+        self.struct_output_linear = nn.Linear(num_hidden*heads[-2], 1)  # self.h_dim  or   1 
 
-        # 语义输出层
-        # self.semantic_output_linear  = nn.Sequential(
-        #     nn.Linear(num_hidden * heads[-2], num_hidden),
-        #     nn.Sigmoid(),
-        #     nn.Linear(num_hidden, 1)
-        # )        
 
         self.semantic_output_linear = nn.Linear(num_hidden * heads[-2], 1) # self.h_dim or  1
-
-        # self.semantic_projection_layer = nn.Linear(num_hidden * heads[-2], heads[-2])
 
 
         #  z1 :  n , heads[-2],  z2 : n, num_hidden * heads[-2]
         self.contrastive_proj = nn.Sequential(
-            nn.Linear(heads[-2]*self.h_dim, heads[-2]*self.h_dim),  # 投影头
+            nn.Linear(heads[-2]*self.h_dim, heads[-2]*self.h_dim),   
             nn.ReLU(),
             nn.Linear(heads[-2]*self.h_dim, heads[-2]*self.h_dim)
         )
-        self.temperature = 0.5  # 对比学习温度参数
+        self.temperature = 0.5  # Comparative learning temperature parameters
 
         self.contrastive_size = configs.contrastive_size
 
@@ -241,10 +227,7 @@ class DualHGNIE(nn.Module):
 
 
         self.loss_alpha = configs.alpha
-
-        # nn.Parameter(torch.FloatTensor(size=(1,)))
         self.loss_beta = configs.beta
-        # nn.Parameter(torch.FloatTensor(size=(1,)))
         self.gamma = nn.Parameter(torch.FloatTensor(size=(1,)))
         self.beta = nn.Parameter(torch.FloatTensor(size=(1,)))
 
@@ -263,9 +246,10 @@ class DualHGNIE(nn.Module):
 
     def attention_encode(self, kg_feats, edge_types, H, mode):
         '''
-        后续消融实验准备：
-        原结构采用hyper_attention编码方式
-        原语义采用hyper_transformer编码方式编码
+        Note:
+        The default structure uses the hyper_attention encoding method.
+        The default semantics uses the hyper_transformer encoding method.
+
         '''
         if mode == 'hyper_attention' :
 
@@ -274,7 +258,7 @@ class DualHGNIE(nn.Module):
 
             edge_feats = self.rel_emb(edge_types)  # [rel_num, num_feature]
 
-            #  聚合邻居信息——> 聚合超边信息
+            #  
             for l in range(self.num_layers):
                 residual = hyper_attention
                 hyper_attention = self.hgat_layers[l](self.g, hyper_attention, edge_feats, H, self.logger)
@@ -304,32 +288,28 @@ class DualHGNIE(nn.Module):
 
     def contrastive_loss(self, z1, z2, indices ):
         """
-        计算结构特征和语义特征的对比损失
-        z1: 结构特征 [N, H]
-        z2: 语义特征 [N, H]
-        indices: 训练节点索引 [self.contrastive_size]
+        Compute the contrastive loss between structural and semantic features.
+        z1: Structural features [N, H]
+        z2: Semantic features [N, H]
+        indices: Training node index [self.contrastive_size]
         """
         if indices.shape[0] > 20000:
             self.contrastive_size = 20000
         else:
             self.contrastive_size = indices.shape[0]
         
-        # 1. 提取训练节点特征
+        # Extract training node features
         z1_batch = z1[indices]  # [self.contrastive_size, H]
         z2_batch = z2[indices]  # [self.contrastive_size, H]
         
-        # 2. 通过投影头
         z1_proj = self.contrastive_proj(z1_batch)  # [self.contrastive_size, H]
         z2_proj = self.contrastive_proj(z2_batch)  # [self.contrastive_size, H]
         
-        # 3. 归一化特征向量
         z1_norm = F.normalize(z1_proj, p=2, dim=1)
         z2_norm = F.normalize(z2_proj, p=2, dim=1)
-        
-        # 4. 计算相似度矩阵
 
-            # 4. 采样计算相似度矩阵
-        sample_size = self.contrastive_size   # 根据 GPU 内存调整
+        # Sampling and calculating similarity matrix
+        sample_size = self.contrastive_size   # Adjust according to GPU memory
         sample_indices = torch.randperm(sample_size)[:sample_size]
         
         z1_sample = z1_norm[sample_indices]
@@ -338,10 +318,10 @@ class DualHGNIE(nn.Module):
         sim_matrix = torch.mm(z1_sample, z2_sample.t()) / self.temperature
 
         
-        # 5. 构建标签（对角线为正样本）
+        # Construct labels (diagonal lines are positive samples)
         labels = torch.arange(sample_size).to(z1.device)  # self.contrastive_size -> sample_size
         
-        # 6. 计算交叉熵损失
+        # Calculating cross entropy loss
         loss = F.cross_entropy(sim_matrix, labels)
         loss += F.cross_entropy(sim_matrix.T, labels)
         
@@ -349,9 +329,9 @@ class DualHGNIE(nn.Module):
  
  
     def feature_interaction(self, struct_feats, semantic_feats):
-        # 使用注意力机制增强特征交互
+        # Attention mechanism to enhance feature interaction
         combined = torch.cat([struct_feats, semantic_feats], dim=-1)
-        # 定义注意力层（线性层）
+
         input_dim = combined.shape[-1]
         attention_layer = nn.Linear(input_dim, 1).to(combined.device)
         attention_weights = torch.sigmoid(attention_layer(combined))
@@ -361,25 +341,41 @@ class DualHGNIE(nn.Module):
         return h_struct, h_semantic
     
 
-    def forward(self, g, struct_feats, semantic_feats,  edge_types , H, dataset,   labels=None,idx=None, training=False,feat_drop=0.2):
+    def forward(self, g, struct_feats, semantic_feats, edge_types, H, dataset,
+                labels=None, idx=None, training=False, feat_drop=0.2):
+        '''
+        Forward pass of the dual-channel attention model.
 
-        '''
-        1. 是否考虑融入新的信息来促进信息的流动和相互的影响
-        2. 是否考虑对比学习来提高，
-            2.1 结构嵌入向量  与  文本嵌入向量的之间距离  
+        Parameters
+        ----------
+        g : DGLGraph, unused (kept for compatibility)
+        struct_feats : torch.Tensor
+            Structural node features.
+        semantic_feats : torch.Tensor
+            Semantic node features.
+        edge_types : torch.Tensor
+            Edge type information.
+        H : torch.Tensor
+            Higher-order incidence/adjacency info.
+        dataset : str
+            Mode of feature usage:
+              'two'      → structure + semantic (fusion + contrastive loss)
+              'concat'   → concatenate features then encode
+              'semantic' → semantic only
+              else       → structure only
+        labels : torch.Tensor, optional
+            Node labels for training.
+        idx : torch.Tensor, optional
+            Indices for loss computation.
+        training : bool, default=False
+            If True, return logits, loss, and GPU memory; else return logits.
+
+        Returns
+        -------
+        logits : torch.Tensor
+        (if training) loss : torch.Tensor, mem_allocated : float
         '''
 
-        # if feat_drop > 0:
-        #     struct_feats = F.dropout(struct_feats,  feat_drop, self.training)
-        #     semantic_feats = F.dropout(semantic_feats,  feat_drop, self.training)
-
-        '''
-        这里为了体现双通道方法的优势，应当对比
-        
-        
-        
-        
-        '''
 
         if 'two' in dataset:
             struct_space, struct_h = self.attention_encode(struct_feats, edge_types, H, self.structure_mode)
@@ -411,13 +407,10 @@ class DualHGNIE(nn.Module):
         else:
             _, struct_h_1 = self.attention_encode(struct_feats, edge_types, H, self.structure_mode)
 
-            # _, struct_h_2 = self.attention_encode(struct_feats, edge_types, H, self.structure_mode)
-            
-            logit_struct =  struct_h_1  # self.output_layer1(struct_h)
 
-            # if self.scale:
-            #     logit_struct = nn.functional.relu((self.centrality * self.gamma + self.beta).unsqueeze(-1) * logit_struct)
             
+            logit_struct =  struct_h_1  
+
             logits = logit_struct
 
         
@@ -432,19 +425,11 @@ class DualHGNIE(nn.Module):
                 loss_all = self.loss_fn(logits[idx].float()  , labels[idx].unsqueeze(-1).float()  )   
                 
                 mem_allocated = torch.cuda.memory_allocated() / 1024 ** 2
-                
-
-                # loss = self.loss_weighting([loss_all, loss_struct, loss_content, contrastive_loss])
-        
-                # loss = loss_all + 0.2*  (loss_struct +  loss_content) / 2 
-                # loss = abs(self.beta) /abs(self.gamma+self.beta) * loss_struct + abs(self.gamma) /abs(self.gamma+self.beta) * loss_content + 0.1 * contrastive_loss + 0.2*  (loss_struct +  loss_content) / 2 
-                
-                # loss = loss_all + 0.1 * contrastive_loss
+    
                 loss =  loss_all + self.loss_alpha*contrastive_loss +  self.loss_beta*  (loss_struct +  loss_content) / 2 
             
             else:
-                # loss_struct = self.loss_fn(logit_struct[idx], labels[idx].unsqueeze(-1))
-                # loss_content = self.loss_fn(logit_content[idx], labels[idx].unsqueeze(-1))
+
 
                 loss_all = self.loss_fn(logits[idx].float()  , labels[idx].unsqueeze(-1).float()  )                   
                 

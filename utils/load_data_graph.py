@@ -4,58 +4,49 @@ import pickle
 import random
 import torch
 
-
-
-
 def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k_rel'):
     """
-    load fb15k data
-    :param data_path: str, data file path
-    :param cross_validation_shift: int, shift of data split
+    Load FB15k relational data.
+    :param data_path: str, path to the dataset file
+    :param cross_validation_shift: int, shift index for cross-validation split
     :return:
     """
-    # data_path = './datasets/fb15k_rel.pk'
-   
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
-     # edge list
+    
     edges = data['edges']   # [2, num_edges]
     labels = data['labels']  # [num_nodes]
-
 
     node_feat1 = data['features']
     node_feat2 = pickle.load(open('./datasets/fb_lang.pk', 'rb'))
     node_feat2 = torch.from_numpy(node_feat2).float()
 
-
     invalid_masks = data['invalid_masks']  # [num_nodes, 1]
     edge_types = data['edge_types']   # [num_edges,1] 
     rel_num = (max(edge_types) + 1).item()
 
-    # construct a heterogeneous graph    
-    hg = dgl.graph(edges)     # Graph type（num_nodes, num_edges）    
+    # Construct a heterogeneous graph    
+    hg = dgl.graph(edges)
 
-    # generate edge norm
-    g = hg.local_var()    #  However, Here really need hypergraph
-    in_deg = g.in_degrees(range(g.number_of_nodes())).float().numpy()    #in_degrees of Graph
-    norm = 1.0 / in_deg     # 1 / indegree
-    norm[np.isinf(norm)] = 0          #  填充入度倒数为inf的值为0
+    # Generate edge normalization
+    g = hg.local_var()  
+    in_deg = g.in_degrees(range(g.number_of_nodes())).float().numpy()  # Node in-degrees
+    norm = 1.0 / in_deg     # Reciprocal of in-degree
+    norm[np.isinf(norm)] = 0          # Set inf to 0
     node_norm = torch.from_numpy(norm).view(-1, 1)           
     g.ndata['norm'] = node_norm
     g.apply_edges(lambda edges: {'norm': edges.dst['norm']})
     edge_norm = g.edata['norm']
 
-    # log transform for labels
+    # Log transform labels
     labels = torch.log(1 + labels)
 
-    # split dataset
+    # Split dataset
     float_mask = np.ones(hg.number_of_nodes()) * -1.
-    label_mask = (invalid_masks == 0)   # 布尔掩码或数组
-    float_mask[label_mask] = np.random.RandomState(seed=0).permutation(np.linspace(0, 1, label_mask.sum())) #使用随机数生成器打乱数列的顺序
+    label_mask = (invalid_masks == 0)   
+    float_mask[label_mask] = np.random.RandomState(seed=0).permutation(np.linspace(0, 1, label_mask.sum())) 
 
-
-    # train_idx, val_idx, test_idx
-    # 70% for train, 10% for val, 20% for test
+    # Train/val/test split
     if cross_validation_shift == 0:
         test_idx = np.where((0. <= float_mask) & (float_mask <= 0.2))[0]
         val_idx = np.where((0.2 < float_mask) & (float_mask <= 0.3))[0]
@@ -82,8 +73,6 @@ def load_fb15k_rel_data(data_path, cross_validation_shift=0, dataset_name='FB15k
     print(len(test_idx), len(val_idx), len(train_idx))
 
     return hg, edge_types, edge_norm, rel_num, node_feat1, node_feat2, labels, train_idx, val_idx, test_idx
-        
-
 
 
 
@@ -363,10 +352,3 @@ def load_data(data_path, dataset_name, cross_validation_shift=0):
     else:
         return NotImplementedError('Unsupported dataset {}'.format(dataset_name))
 
-
-def get_centrality(graph):
-    g = graph.local_var()
-    in_deg = g.in_degrees(range(g.number_of_nodes())).float()
-    theta = 1e-4
-    centrality = torch.log(in_deg + theta)
-    return centrality

@@ -29,7 +29,7 @@ class DualGAT(nn.Module):
         self.scoring_nn_semantic = nn.ModuleList()
 
         self.heads = heads
-        for _ in range(heads[0]):   #多头注意力机制，通过邻居节点信息聚合整体特征（这部分的model 替换为超图注意力机制）
+        for _ in range(heads[0]):  
             self.scoring_nn_struct.append(nn.Sequential(
                 nn.Dropout(feat_drop),
                 nn.Linear(in_dim_struct, int(0.5*in_dim_struct)),
@@ -80,7 +80,6 @@ class DualGAT(nn.Module):
 
             edge_feats = self.rel_emb(edge_types)
 
-            #  聚合邻居信息——> 聚合超边信息
             for l in range(self.num_layers):
                 h_struct = self.sa_layers_struct[l](self.g, h_struct, edge_feats)
                 if l != (self.num_layers-1):
@@ -97,7 +96,6 @@ class DualGAT(nn.Module):
 
             edge_feats = self.rel_emb(edge_types)
 
-            #  聚合邻居信息——> 聚合超边信息
             for l in range(self.num_layers):
                 h_semantic = self.sa_layers_semantic[l](self.g, h_semantic, edge_feats)
                 if l != (self.num_layers-1):
@@ -117,7 +115,6 @@ class DualGAT(nn.Module):
 
             edge_feats = self.rel_emb(edge_types)
 
-            #  聚合邻居信息——> 聚合超边信息
             for l in range(self.num_layers):
                 h_semantic = self.sa_layers_semantic[l](self.g, h_semantic, edge_feats)
                 if l != (self.num_layers-1):
@@ -136,7 +133,6 @@ class DualGAT(nn.Module):
 
             edge_feats = self.rel_emb(edge_types)
 
-            #  聚合邻居信息——> 聚合超边信息
             for l in range(self.num_layers):
                 h_struct = self.sa_layers_struct[l](self.g, h_struct, edge_feats)
                 if l != (self.num_layers-1):

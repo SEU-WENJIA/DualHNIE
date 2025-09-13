@@ -55,11 +55,11 @@ class EarlyStopping(object):
         # print(f"save model {filename}")
         torch.save(model.state_dict(), self.save_path)
 
-    # def load_checkpoint(self, model):
-    #     """Load the latest checkpoint."""
-    #     filename = os.path.join(self.save_folder, f"epoch_{self.best_epoch}.pkl")
-    #     print(f"load model {filename}")
-    #     model.load_state_dict(torch.load(filename))
+    def load_checkpoint(self, model):
+        """Load the latest checkpoint."""
+        filename = os.path.join(self.save_folder, f"epoch_{self.best_epoch}.pkl")
+        print(f"load model {filename}")
+        model.load_state_dict(torch.load(filename))
 
 
 class EarlyStopping_simple:

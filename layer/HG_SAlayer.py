@@ -146,7 +146,7 @@ class HGSALayer(nn.Module):
         # Feature transformation parameters
         self.fc = nn.Linear(in_feats, out_feats * num_heads, bias=False)
         
-        # Attention parameters (优化为更高效的参数形式)
+        # Attention parameters 
         self.attn_src = nn.Parameter(torch.Tensor(1, num_heads, out_feats))
         self.attn_edge = nn.Parameter(torch.Tensor(1, num_heads, edge_dim))
         
@@ -168,7 +168,7 @@ class HGSALayer(nn.Module):
         self.activation = activation
 
     def reset_parameters(self):
-        """Xavier初始化保证训练稳定性"""
+        
         gain = nn.init.calculate_gain('relu')
         nn.init.xavier_uniform_(self.fc.weight, gain)
         nn.init.xavier_uniform_(self.attn_src, gain)
@@ -179,12 +179,20 @@ class HGSALayer(nn.Module):
 
     def get_nonzero_indices_chunked(self, H, row_chunk_size=10000):
         """
-        从大张量 H 中获取非零元素的索引（避免 INT_MAX 限制），按行分块处理。
-        参数：
-            H: torch.Tensor [N, D]
-            row_chunk_size: 每次处理的行数（根据显存和效率调节）
-        返回：
-            torch.LongTensor of shape [num_nonzero, 2]
+        Get indices of nonzero elements from a large tensor H in row-wise chunks
+        to avoid INT_MAX or memory overflow issues.
+
+        Parameters
+        ----------
+        H : torch.Tensor [N, D]
+            Input dense tensor.
+        row_chunk_size : int, default=10000
+            Number of rows to process per chunk (tune based on GPU memory).
+
+        Returns
+        -------
+        torch.LongTensor [num_nonzero, 2]
+            Indices of nonzero elements (row, col).
         """
         nonzero_indices = []
         total_rows = H.shape[0]
@@ -193,84 +201,110 @@ class HGSALayer(nn.Module):
             row_end = min(row_start + row_chunk_size, total_rows)
             chunk = H[row_start:row_end]  # shape: [chunk_rows, D]
 
-            # 将 chunk 转为 sparse COO 表示，获取非零索引
+            # Convert chunk to sparse COO format and get nonzero indices
             chunk_sparse = chunk.to_sparse()
-            chunk_idx = chunk_sparse.indices().t()  # shape: [num_nonzero_in_chunk, 2]
+            chunk_idx = chunk_sparse.indices().t()  # [num_nonzero_in_chunk, 2]
 
-            # 行索引加上偏移
+            # Offset row indices
             chunk_idx[:, 0] += row_start
 
             nonzero_indices.append(chunk_idx)
 
-        # 合并所有索引
+        # Concatenate all indices
         all_indices = torch.cat(nonzero_indices, dim=0)
         return all_indices
 
 
+
     def forward(self, hypergraph, feat, edge_feat, H, logger=None):
+        """
+        Hypergraph attention forward pass.
+
+        Parameters
+        ----------
+        hypergraph : object
+            Kept for API compatibility; not used inside this function.
+        feat : torch.Tensor, shape [n_nodes, in_feats]
+            Node input features.
+        edge_feat : torch.Tensor, shape [n_edges, edge_dim]
+            Hyperedge features.
+        H : torch.Tensor, shape [n_nodes, n_edges]
+            Node-hyperedge incidence matrix (dense or sparse-like).
+        logger : logging.Logger or None
+            Optional logger for diagnostics.
+
+        Returns
+        -------
+        torch.Tensor, shape [n_nodes, num_heads * out_feats]
+            Output node representations (heads concatenated).
+
+        Notes
+        -----
+        - Uses `get_nonzero_indices_chunked` to retrieve nonzero (node, edge) pairs in chunks
+        to avoid converting large dense matrices to sparse and hitting memory/INT_MAX issues.
+        - Computes node->hyperedge attention per head, does grouped softmax per hyperedge
+        using scatter_reduce_/scatter_add_, aggregates messages into hyperedge features,
+        then disseminates hyperedge features back to nodes via einsum(H, hyper_edge_feats).
+        - Internal aggregation buffers use bfloat16 to save memory; final output is returned
+        with the module's usual dtype/shape.
+        - If H contains no nonzero pairs, returns a zero tensor with the expected output shape.
+        """
         device = feat.device
         H = H.to(device)
         n_nodes, n_edges = H.shape
-        
-        # 特征变换
+
+        # feature transform
         h_src = self.feat_drop(feat)
         feat_src = self.fc(h_src).view(n_nodes, self._num_heads, self._out_feats)
-        
-        # 获取所有有效的节点-超边对 (修复关键错误)
-        # H_sparse = H.to_sparse()
-        # indices = H_sparse.indices().t() 
-        # indices = H.nonzero(as_tuple=False)  # [E, 2] with (node_idx, edge_idx)
 
+        # collect all valid (node, hyperedge) pairs (chunked to avoid large sparse conversions)
         indices = self.get_nonzero_indices_chunked(H, row_chunk_size=10000)
         if indices.size(0) == 0:
             return torch.zeros(n_nodes, self._num_heads * self._out_feats, device=device)
-        
-        # 准备注意力计算
+
+        # prepare for attention computation
         src_indices, edge_indices = indices[:, 0], indices[:, 1]
-        
-        # 计算注意力分数 (包含源节点和目标超边特征)
-        src_feat = feat_src[src_indices]  # [E, h, d]
+
+        # attention score computation (node features + edge feature interaction)
+        src_feat = feat_src[src_indices]                         # [E, heads, out_dim]
         edge_feat_expanded = edge_feat[edge_indices].unsqueeze(1)  # [E, 1, edge_dim]
-        
-        # 注意力分数计算: 源节点特征 + 边特征交互
-        attn_score = (src_feat * self.attn_src).sum(dim=-1)  # [E, h]
-        edge_contrib = (edge_feat_expanded * self.attn_edge).sum(dim=-1).squeeze(1)  # [E, h]
+
+        attn_score = (src_feat * self.attn_src).sum(dim=-1)      # [E, heads]
+        edge_contrib = (edge_feat_expanded * self.attn_edge).sum(dim=-1).squeeze(1)  # [E, heads]
         e = attn_score + edge_contrib
-        e = self.leaky_relu(e)  # [E, h]
-        
-        # 超边内注意力归一化 (使用高效分组softmax)
+        e = self.leaky_relu(e)                                  # [E, heads]
+
+        # grouped softmax per hyperedge: use scatter reduce / add for stability
         max_val = torch.zeros(n_edges, self._num_heads, device=device).to(dtype=torch.bfloat16)
-        max_val.scatter_reduce_(0, edge_indices.unsqueeze(1).expand(-1, self._num_heads), 
+        max_val.scatter_reduce_(0, edge_indices.unsqueeze(1).expand(-1, self._num_heads),
                                 e, reduce="amax", include_self=False)
-        
+
         e_exp = torch.exp(e - max_val[edge_indices])
         sum_exp = torch.zeros_like(max_val)
         sum_exp.scatter_add_(0, edge_indices.unsqueeze(1).expand(-1, self._num_heads), e_exp)
-        
-        attention = e_exp / (sum_exp[edge_indices] + 1e-9)  # [E, h]
+
+        attention = e_exp / (sum_exp[edge_indices] + 1e-9)       # [E, heads]
         attention = self.attn_drop(attention)
-        
-        # 节点到超边聚合
-        messages = src_feat * attention.unsqueeze(-1)  # [E, h, d]
+
+        # node -> hyperedge message and aggregation
+        messages = src_feat * attention.unsqueeze(-1)           # [E, heads, out_dim]
         hyper_edge_feats = torch.zeros(n_edges, self._num_heads, self._out_feats, device=device).to(dtype=torch.bfloat16)
         hyper_edge_feats.index_add_(0, edge_indices, messages)
-        
-        # 超边到节点聚合 (矩阵乘法优化)
-        rst = torch.einsum('ne,ehd->nhd', H, hyper_edge_feats)  # [n, h, d]
-        
-        # 残差连接
+
+        # hyperedge -> node aggregation (einsum for efficiency)
+        rst = torch.einsum('ne,ehd->nhd', H, hyper_edge_feats)  # [n_nodes, heads, out_dim]
+
+        # residual connection (if provided)
         if self.res_fc is not None:
             resval = self.res_fc(feat).view(n_nodes, self._num_heads, self._out_feats)
             rst += resval
-        
-        # 激活函数
+
+        # activation
         if self.activation:
             rst = self.activation(rst)
 
-        # mem_allocated = torch.cuda.memory_allocated() / 1024 ** 2
-        # logger.info("Hyperattention GPU: allocated {:.2f} MB".format(mem_allocated))
-    
         return rst.view(n_nodes, -1)
+
     
 
 

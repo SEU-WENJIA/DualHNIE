@@ -61,7 +61,7 @@ class DualHGNN_Two(nn.Module):
 
 
         if 'dualhgat' in configs.model:
-            # 结构编码采用，超图注意力机制，提取知识图谱的结构特征
+            # Structural encoding uses the hypergraph attention mechanism to extract the structural features of the knowledge graph.
 
             self.scoring_nn_struct = nn.ModuleList()
             self.heads = heads 
@@ -102,7 +102,7 @@ class DualHGNN_Two(nn.Module):
                     ))  
             
 
-            # 语义信息编码学习
+            # Semantic Information Encoding Learning
             self.scoring_nn_semantic = nn.ModuleList()
             self.heads = heads 
             for _ in range(heads[0]):
@@ -205,22 +205,22 @@ class DualHGNN_Two(nn.Module):
                 ))
 
         elif 'dualhgcn' in configs.model:
-            # 超图卷积网络初始化——结构视图
+            # Hypergraph Convolutional Network Initialization — Structural View
             self.hgc_layers_struct = nn.ModuleList()
             self.hgc_layers_struct.append(HypergraphConvLayer(
                 in_dim=in_dim_struct,
                 out_dim=num_hidden*heads[-2],
-                edge_dim=pred_dim,      # 可选超边特征
-                use_edge_feat=True,     # 根据需求开启
+                edge_dim=pred_dim,       
+                use_edge_feat=True,      
                 feat_drop=feat_drop,
                 residual=residual,
                 batch_norm=batch_norm
             ))
 
-            # 隐藏层
+
             for l in range(1, num_layers):
                 self.hgc_layers_struct.append(HypergraphConvLayer(
-                    in_dim=num_hidden*heads[-2],     # 超图卷积不需要多头拼接
+                    in_dim=num_hidden*heads[-2],      
                     out_dim=num_hidden*heads[-2],
                     edge_dim=pred_dim,
                     use_edge_feat=True,
@@ -229,7 +229,7 @@ class DualHGNN_Two(nn.Module):
                     batch_norm=batch_norm
                 ))
 
-            # 超图卷积网络初始化——语义视图
+            # Hypergraph Convolutional Network Initialization - Semantic View
             self.hgc_layers_semantic = nn.ModuleList()
             self.hgc_layers_semantic.append(HypergraphConvLayer(
                 in_dim=in_dim_semantic,
@@ -241,7 +241,7 @@ class DualHGNN_Two(nn.Module):
                 batch_norm=batch_norm
             ))
 
-            # 隐藏层
+
             for l in range(1, num_layers):
                 self.hgc_layers_semantic.append(HypergraphConvLayer(
                     in_dim=num_hidden*heads[-2],
@@ -256,40 +256,23 @@ class DualHGNN_Two(nn.Module):
 
 
                     
-        # 结构输出层
-        # self.struct_output_linear = nn.Sequential(
-        #     nn.Linear(heads[-2], num_hidden),
-        #     nn.Sigmoid(),
-        #     nn.Linear(num_hidden, 1)
-        # )
+
         self.struct_output_linear = nn.Linear(num_hidden * heads[-2], 1)  # self.h_dim  or   1 
 
-
-        # 语义输出层
-        # self.semantic_output_linear  = nn.Sequential(
-        #     nn.Linear(num_hidden * heads[-2], num_hidden),
-        #     nn.Sigmoid(),
-        #     nn.Linear(num_hidden, 1)
-        # )        
 
         self.semantic_output_linear = nn.Linear(num_hidden * heads[-2], 1) # self.h_dim or  1
 
 
 
-        # self.semantic_projection_layer = nn.Linear(num_hidden * heads[-2], heads[-2])
-
-
         #  z1 :  n , heads[-2],  z2 : n, num_hidden * heads[-2]
         self.contrastive_proj = nn.Sequential(
-            nn.Linear(heads[-2]*self.h_dim, heads[-2]*self.h_dim),  # 投影头
+            nn.Linear(heads[-2]*self.h_dim, heads[-2]*self.h_dim),   
             nn.ReLU(),
             nn.Linear(heads[-2]*self.h_dim, heads[-2]*self.h_dim)
         )
-        self.temperature = 0.5  # 对比学习温度参数
+        self.temperature = 0.5 
 
         self.contrastive_size = configs.contrastive_size
-
-        # self.gate_linear = nn.Linear(2 ,1)
         self.fusion_mode = configs.fusion_mode
         self.fusion_layer = structure_semantics_fusion(
                                                      struct_dim=1,  
@@ -303,9 +286,8 @@ class DualHGNN_Two(nn.Module):
 
         self.loss_alpha = configs.alpha
 
-        # nn.Parameter(torch.FloatTensor(size=(1,)))
+
         self.loss_beta = configs.beta
-        # nn.Parameter(torch.FloatTensor(size=(1,)))
         self.gamma = nn.Parameter(torch.FloatTensor(size=(1,)))
         self.beta = nn.Parameter(torch.FloatTensor(size=(1,)))
 
@@ -323,22 +305,14 @@ class DualHGNN_Two(nn.Module):
             self.rel_emb = rel_emb
 
     def attention_encode(self, kg_feats_struct, kg_feats_semantic , edge_types, H):
-        '''
-        后续消融实验准备：
-        原结构采用hyper_attention编码方式
-        原语义采用hyper_transformer编码方式编码
-        '''
+
         if self.model == 'dualhgat' :
-
-
-            # 结构信息编码
 
             hyper_attention_struct = [score_nn(kg_feats_struct) for score_nn in self.scoring_nn_struct]
             hyper_attention_struct = torch.cat(hyper_attention_struct, dim=-1)
 
             edge_feats = self.rel_emb(edge_types)  # [rel_num, num_feature]
 
-            #  聚合邻居信息——> 聚合超边信息
             for l in range(self.num_layers):
                 residual = hyper_attention_struct
                 hyper_attention_struct = self.hgat_layers_struct[l](self.g, hyper_attention_struct, edge_feats, H, self.logger)
@@ -350,14 +324,11 @@ class DualHGNN_Two(nn.Module):
             latent_space_struct = hyper_attention_struct
             logits_struct = self.struct_output_linear(hyper_attention_struct)    #h_struct.flatten(1) # [n_nodes, n_heads]     
 
-
-            # 语义信息编码
             hyper_attention_semantic = [score_nn(kg_feats_semantic) for score_nn in self.scoring_nn_semantic]
             hyper_attention_semantic = torch.cat(hyper_attention_semantic, dim=-1)
 
             edge_feats = self.rel_emb(edge_types)  # [rel_num, num_feature]
 
-            #  聚合邻居信息——> 聚合超边信息
             for l in range(self.num_layers):
                 residual = hyper_attention_semantic
                 hyper_attention_struct = self.hgat_layers_semantic[l](self.g, hyper_attention_semantic, edge_feats, H, self.logger)
@@ -384,7 +355,6 @@ class DualHGNN_Two(nn.Module):
                     logger =self.logger )   
                 
             # semantic output projection
-            # latent_space = self.semantic_projection_layer(kg_feats)
             latent_space_struct = kg_feats_struct
             logits_struct = self.struct_output_linear(kg_feats_struct)                
 
@@ -440,33 +410,22 @@ class DualHGNN_Two(nn.Module):
 
 
     def contrastive_loss(self, z1, z2, indices ):
-        """
-        计算结构特征和语义特征的对比损失
-        z1: 结构特征 [N, H]
-        z2: 语义特征 [N, H]
-        indices: 训练节点索引 [self.contrastive_size]
-        """
+
         if indices.shape[0] > 20000:
             self.contrastive_size = 20000
         else:
             self.contrastive_size = indices.shape[0]
         
-        # 1. 提取训练节点特征
         z1_batch = z1[indices]  # [self.contrastive_size, H]
         z2_batch = z2[indices]  # [self.contrastive_size, H]
         
-        # 2. 通过投影头
         z1_proj = self.contrastive_proj(z1_batch)  # [self.contrastive_size, H]
         z2_proj = self.contrastive_proj(z2_batch)  # [self.contrastive_size, H]
         
-        # 3. 归一化特征向量
         z1_norm = F.normalize(z1_proj, p=2, dim=1)
         z2_norm = F.normalize(z2_proj, p=2, dim=1)
         
-        # 4. 计算相似度矩阵
-
-            # 4. 采样计算相似度矩阵
-        sample_size = self.contrastive_size   # 根据 GPU 内存调整
+        sample_size = self.contrastive_size   
         sample_indices = torch.randperm(sample_size)[:sample_size]
         
         z1_sample = z1_norm[sample_indices]
@@ -474,11 +433,8 @@ class DualHGNN_Two(nn.Module):
     
         sim_matrix = torch.mm(z1_sample, z2_sample.t()) / self.temperature
 
-        
-        # 5. 构建标签（对角线为正样本）
         labels = torch.arange(sample_size).to(z1.device)  # self.contrastive_size -> sample_size
         
-        # 6. 计算交叉熵损失
         loss = F.cross_entropy(sim_matrix, labels)
         loss += F.cross_entropy(sim_matrix.T, labels)
         
@@ -486,9 +442,9 @@ class DualHGNN_Two(nn.Module):
  
  
     def feature_interaction(self, struct_feats, semantic_feats):
-        # 使用注意力机制增强特征交互
+
         combined = torch.cat([struct_feats, semantic_feats], dim=-1)
-        # 定义注意力层（线性层）
+
         input_dim = combined.shape[-1]
         attention_layer = nn.Linear(input_dim, 1).to(combined.device)
         attention_weights = torch.sigmoid(attention_layer(combined))

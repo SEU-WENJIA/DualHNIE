@@ -44,7 +44,7 @@ def get_hyperedge_types(edges, edge_type, hyperedges):
     for hyperedge in hyperedges:
         if len(hyperedge) < 2:
             # Assign a default type for hyperedges with a single node
-            hyperedge_types.append(tuple([-1]))  # 使用 -1 表示默认类型
+            hyperedge_types.append(tuple([-1]))   
         else:
             # Generate all possible node pairs within the hyperedge
             node_pairs = combinations(hyperedge, 2)
@@ -319,9 +319,9 @@ def load_imdb_s_rel_data(data_path, cross_validation_shift=0, dataset_name='IMDB
     hyperedges_path = os.path.join(dataset_dir, 'hyperedges.npy')
     node_hyperedge_array_path = os.path.join(dataset_dir, 'node_hyperedge_array.npy')
 
-    # 检查文件是否存在
+
     if os.path.exists(hyperedge_types_path) and os.path.exists(hyperedges_path) and os.path.exists(node_hyperedge_array_path):
-        # 文件存在，直接读取
+       
         hyperedge_types = torch.load(hyperedge_types_path)
         hyperedges = np.load(hyperedges_path, allow_pickle=True)
         node_hyperedge_array = np.load(node_hyperedge_array_path, allow_pickle=True).tolist()
@@ -463,9 +463,9 @@ def load_tmdb_rel_data(data_path, cross_validation_shift=0, dataset_name='TMDB_r
     hyperedges_path = os.path.join(dataset_dir, 'hyperedges.npy')
     node_hyperedge_array_path = os.path.join(dataset_dir, 'node_hyperedge_array.npy')
 
-    # 检查文件是否存在
+
     if os.path.exists(hyperedge_types_path) and os.path.exists(hyperedges_path) and os.path.exists(node_hyperedge_array_path):
-        # 文件存在，直接读取
+
         hyperedge_types = torch.load(hyperedge_types_path)
         hyperedges = np.load(hyperedges_path, allow_pickle=True)
         node_hyperedge_array = np.load(node_hyperedge_array_path, allow_pickle=True).tolist()
@@ -609,9 +609,9 @@ def load_music10k_rel_data(data_path, cross_validation_shift=0, dataset_name='mu
     hyperedges_path = os.path.join(dataset_dir, 'hyperedges.npy')
     node_hyperedge_array_path = os.path.join(dataset_dir, 'node_hyperedge_array.npy')
 
-    # 检查文件是否存在
+
     if os.path.exists(hyperedge_types_path) and os.path.exists(hyperedges_path) and os.path.exists(node_hyperedge_array_path):
-        # 文件存在，直接读取
+
         hyperedge_types = torch.load(hyperedge_types_path)
         hyperedges = np.load(hyperedges_path, allow_pickle=True)
         node_hyperedge_array = np.load(node_hyperedge_array_path, allow_pickle=True).tolist()
