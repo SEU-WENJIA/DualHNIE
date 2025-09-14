@@ -1,16 +1,10 @@
-# import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# import dgl.function as fn
-# from dgl.nn.pytorch.utils import Identity
 from torch_scatter import scatter_softmax, scatter_add, scatter_max
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"   
-
-
-import torch.nn as nn
 
 class Identity(nn.Module):
     def __init__(self):
@@ -274,3 +268,6 @@ class SCAHGTLayer(nn.Module):
             ffn_out = self.batch_norm2(ffn_out)
 
         return ffn_out
+
+
+

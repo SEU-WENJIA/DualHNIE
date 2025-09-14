@@ -4,9 +4,9 @@ import numpy as np
 
 
 
-model = SentenceTransformer('/public/shaoqi/HGT/LENIE-main/all-mpnet-base-v2')
+model = SentenceTransformer('./all-mpnet-base-v2')
 
-des_tsv_path = '/public/shaoqi/HGT/datasets/MUSIC10K/node_info_artist_familiarity.tsv'  
+des_tsv_path = './MUSIC10K/node_info_artist_familiarity.tsv'  
 with open(des_tsv_path, 'r', encoding='utf-8') as file:  
     content = file.read()
 lines = content.split('\n')  
@@ -38,11 +38,10 @@ for row in attribute_data:
 
 text_embeddings = model.encode(text_inputs, show_progress_bar=True)  # shape = [N, 768 or 384]
 
-# 拼接 score 和 valid
+
 score_array = np.array(score_list).reshape(-1, 1)
 valid_array = np.array(valid_list).reshape(-1, 1)
 
-# 最终特征向量： [语义特征 | score | valid]
 final_embeddings = np.hstack([text_embeddings, score_array, valid_array])
 
    
