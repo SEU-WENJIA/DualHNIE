@@ -19,7 +19,12 @@ pip install -r requirements.txt
 
 ### 1.2 Data 
 
-The data can be obtained and downloaded from ([Google Drive](https://drive.google.com/file/d/1OH671dAdRRi2H5rae2bVi0vOkhbFkDcy/view?usp=drive_link)), and makedir path ```dataset/``` and put dataset in ```dataset/```.
+**Download**: The data can be obtained and downloaded from ([Google Drive](https://drive.google.com/file/d/1OH671dAdRRi2H5rae2bVi0vOkhbFkDcy/view?usp=drive_link)), and makedir path ```dataset/``` and put dataset in ```dataset/```.
+
+
+**Semantic Encode**:  The semantic features like "node name and node descriptions ", we employ the pretrained LLMs([BERT](https://huggingface.co/google-bert/bert-base-uncased) or [all-mpnet-base](https://huggingface.co/sentence-transformers/all-mpnet-base-v2) ) to encode as prefix prompt "{name}: {description}", you can reproduce this process in ```./datasets/MUSIC10K/proposs.py```.
+
+
 
 ### 1.3 Higher-order Relation Construction
 
