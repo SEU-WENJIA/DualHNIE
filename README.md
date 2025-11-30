@@ -1,9 +1,9 @@
-## MetaHGNIE: Meta-Path Induced Hypergraph Contrastive Learning for Node Importance in Heterogeneous Knowledge Graphs
+## DualHNIE:Dual-Channel Hypergraph Learning for Node Importance Estimation in Knowledge Graph
 
-Welcome to MetaHGNIE's GitHub repository! This repository hosts the code, data and model weight of **MetaHGNIE**.
+Welcome to DualHNIE's GitHub repository! This repository hosts the code, data and model weight of **DualHNIE**.
 
 **Abstract**: Node importance estimation (NIE) in heterogeneous knowledge graphs is a critical yet challenging task, essential for applications such as recommendation, knowledge reasoning, and question answering. Existing methods often rely on pairwise connections, neglecting high-order dependencies among multiple entities and relations, and they treat structural and semantic signals independently, hindering effective cross-modal integration.
-To address these challenges, we propose MetaHGNIE, a meta-path induced hypergraph contrastive learning framework for disentangling and aligning structural and semantic information. MetaHGNIE constructs a higher-order knowledge graph via meta-path sequences, where typed hyperedges capture multi-entity relational contexts. Structural dependencies are aggregated with local attention, while semantic representations are encoded through a hypergraph transformer equipped with sparse chunking to reduce redundancy. Finally, a multimodal fusion module integrates structural and semantic embeddings under contrastive learning with auxiliary supervision, ensuring robust cross-modal alignment. Extensive experiments on benchmark NIE datasets demonstrate that MetaHGNIE consistently outperforms state-of-the-art baselines, highlighting the benefits of explicitly modeling high-order interactions and aligning multimodal representations in heterogeneous knowledge graphs.
+To address these challenges, we propose DualHNIE, a meta-path induced hypergraph contrastive learning framework for disentangling and aligning structural and semantic information. DualHNIE constructs a higher-order knowledge graph via meta-path sequences, where typed hyperedges capture multi-entity relational contexts. Structural dependencies are aggregated with local attention, while semantic representations are encoded through a hypergraph transformer equipped with sparse chunking to reduce redundancy. Finally, a multimodal fusion module integrates structural and semantic embeddings under contrastive learning with auxiliary supervision, ensuring robust cross-modal alignment. Extensive experiments on benchmark NIE datasets demonstrate that DualHNIE consistently outperforms state-of-the-art baselines, highlighting the benefits of explicitly modeling high-order interactions and aligning multimodal representations in heterogeneous knowledge graphs.
 
 <p align="center">
 <img src="img/figure.png" height = "480" alt="" align=center />
@@ -75,7 +75,7 @@ Call the pre-trained large model ```all-mpnet-base-v2``` to encode semantic info
 | `beta` | float | Weight for unimodal prediction loss | `0.2` |
 |
 
-### 2.2 Training MetaHGNIE to Demonstrate effevtivenness purpose（Table 1， Table 3, Figure 3）
+### 2.2 Training DualHNIE to Demonstrate effevtivenness purpose（Table 1， Table 3, Figure 3）
 
 Run scripts under the folder `./scripts`. For example, to evaluate on four knowledge graphs datasets by:
 
@@ -83,7 +83,7 @@ Run scripts under the folder `./scripts`. For example, to evaluate on four knowl
 sh ./scripts/run_main.sh
 ```
 
-### 2.3 Training MetaHGNIE to Demonstrate Dualchannels Benifits (Table 2)
+### 2.3 Training DualHNIE to Demonstrate Dualchannels Benifits (Table 2)
 
 Run scripts under the folder `./scripts`. For example, to evaluate on four knowledge graphs datasets by:
 
@@ -103,7 +103,7 @@ sh ./scripts/run_loss.sh
 
 ### 3.2 Sparse-Chunked Aggregation Mechanism(w/o).  (Table 5, Table C.1)
 
-Run scripts under the folder `./scripts`. and replace the ```SCAHGTLayer``` with ```HGTLayer``` in ```model/MetaHGNIE.py```
+Run scripts under the folder `./scripts`. and replace the ```SCAHGTLayer``` with ```HGTLayer``` in ```model/DualHNIE.py```
 
 ```shell
 sh ./scripts/run_chunk.sh
