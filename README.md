@@ -13,7 +13,7 @@ To address these challenges, we propose DualHNIE, a meta-path induced hypergraph
 If you find this repository helpful for your research, please cite our paper. 
 
 ```tex
-@misc{chen2025metahgnie,
+@article{chen2025metahgnie,
       title={MetaHGNIE: Meta-Path Induced Hypergraph Contrastive Learning in Heterogeneous Knowledge Graphs}, 
       author={Jiawen Chen and Yanyan He and Qi Shao and Mengli Wei and Duxin Chen and Wenwu Yu and Yanlong Zhao},
       year={2025},
