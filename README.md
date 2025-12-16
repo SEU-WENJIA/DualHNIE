@@ -9,6 +9,8 @@ To address these challenges, we propose DualHNIE, a meta-path induced hypergraph
 <img src="img/figure.png" height = "480" alt="" align=center />
 </p>
 
+Paper : https://arxiv.org/abs/2512.12477
+
 
 If you find this repository helpful for your research, please cite our paper. 
 
